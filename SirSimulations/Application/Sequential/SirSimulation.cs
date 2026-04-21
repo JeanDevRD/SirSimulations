@@ -1,10 +1,6 @@
-﻿using SirSimulations.Domain;
+﻿using SirSimulations.Application.Parallels;
+using SirSimulations.Domain;
 using SirSimulations.Domain.Enums;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SirSimulations.Application
 {
@@ -13,6 +9,7 @@ namespace SirSimulations.Application
         private readonly SimulationConfig _config;
         private readonly Grid _grid;
         private readonly Random _random;
+        private long _previousSusceptible = 0;
 
         public SirSimulator(SimulationConfig config)
         {
@@ -24,15 +21,12 @@ namespace SirSimulations.Application
         public void InitializeGrid()
         {
             for (int row = 0; row < _config.GridRows; row++)
-            {
                 for (int col = 0; col < _config.GridColumns; col++)
                 {
                     bool startsInfected = _random.NextDouble() < _config.InitialInfectedFraction;
                     _grid.SetNextCell(row, col,
                         startsInfected ? CellState.Infected : CellState.Susceptible);
                 }
-            }
-
             _grid.SwapBuffers();
         }
 
@@ -60,7 +54,6 @@ namespace SirSimulations.Application
         private CellState ComputeNextState(int row, int col)
         {
             CellState today = _grid.GetCell(row, col);
-
             return today switch
             {
                 CellState.Susceptible => TryToGetInfected(row, col),
@@ -69,50 +62,37 @@ namespace SirSimulations.Application
             };
         }
 
-
         private CellState TryToGetInfected(int row, int col)
         {
             int infectedNeighbors = CountInfectedNeighbors(row, col);
-
             double probabilityOfStayingHealthy =
                 Math.Pow(1.0 - _config.InfectionProbability, infectedNeighbors);
-
-            bool getsInfected = _random.NextDouble() > probabilityOfStayingHealthy;
-            return getsInfected ? CellState.Infected : CellState.Susceptible;
+            return _random.NextDouble() > probabilityOfStayingHealthy
+                ? CellState.Infected
+                : CellState.Susceptible;
         }
 
         private CellState TryToRecoverOrDie()
         {
-            if (_random.NextDouble() < _config.RecoveryProbability)
-                return CellState.Recovered;
-
-            if (_random.NextDouble() < _config.DeathProbability)
-                return CellState.Dead;
-
+            if (_random.NextDouble() < _config.RecoveryProbability) return CellState.Recovered;
+            if (_random.NextDouble() < _config.DeathProbability) return CellState.Dead;
             return CellState.Infected;
         }
 
         private int CountInfectedNeighbors(int row, int col)
         {
             int count = 0;
-
             for (int deltaRow = -1; deltaRow <= 1; deltaRow++)
-            {
                 for (int deltaCol = -1; deltaCol <= 1; deltaCol++)
                 {
                     if (deltaRow == 0 && deltaCol == 0) continue;
-
                     int neighborRow = row + deltaRow;
                     int neighborCol = col + deltaCol;
-
                     bool isInsideGrid = neighborRow >= 0 && neighborRow < _config.GridRows
                                      && neighborCol >= 0 && neighborCol < _config.GridColumns;
-
                     if (isInsideGrid && _grid.GetCell(neighborRow, neighborCol) == CellState.Infected)
                         count++;
                 }
-            }
-
             return count;
         }
 
@@ -130,13 +110,18 @@ namespace SirSimulations.Application
                         case CellState.Dead: dead++; break;
                     }
 
+            long newInfections = _previousSusceptible == 0 ? 0 : _previousSusceptible - susceptible;
+            double r0 = infected > 0 ? (double)newInfections / infected : 0;
+            _previousSusceptible = susceptible;
+
             return new DayStatistics
             {
                 Day = day,
                 SusceptibleCount = susceptible,
                 InfectedCount = infected,
                 RecoveredCount = recovered,
-                DeadCount = dead
+                DeadCount = dead,
+                ReproductionNumber = r0
             };
         }
     }

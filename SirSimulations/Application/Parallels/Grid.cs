@@ -1,6 +1,6 @@
 ﻿using SirSimulations.Domain.Enums;
 
-namespace SirSimulations.Application
+namespace SirSimulations.Application.Parallels
 {
     public class Grid
     {

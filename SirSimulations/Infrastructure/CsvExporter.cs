@@ -1,27 +1,38 @@
 ﻿using SirSimulations.Domain;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SirSimulations.Infrastructure
 {
     public class CsvExporter
     {
-        public static void Export(IEnumerable<DayStatistics> history, string filePath)
+        public static void ExportSimulationResults(IEnumerable<SimulationResult> results, string filePath)
         {
             var lines = new List<string>
-        {
-            "Day,Susceptible,Infected,Recovered,Dead,TotalPopulation"
-        };
+            {
+                "SimIndex,Seed,PeakInfected,PeakDay,Duration,TotalDead,TotalRecovered,TotalPopulation"
+            };
 
-            foreach (var day in history)
-                lines.Add($"{day.Day},{day.SusceptibleCount},{day.InfectedCount}," +
-                          $"{day.RecoveredCount},{day.DeadCount},{day.TotalPopulation}");
+            foreach (var r in results)
+                lines.Add($"{r.SimulationIndex},{r.RandomSeed},{r.PeakInfected}," +
+                          $"{r.PeakDay},{r.EpidemicDuration},{r.TotalDead}," +
+                          $"{r.TotalRecovered},{r.TotalPopulation}");
 
             File.WriteAllLines(filePath, lines);
             Console.WriteLine($"[CSV] Resultados guardados en: {filePath}");
+        }
+
+        public static void ExportSummary(MonteCarloSummary summary, string filePath)
+        {
+            var lines = new List<string>
+            {
+                "Metric,Avg,Min,Max",
+                $"PeakInfected,{summary.AvgPeakInfected:F0},{summary.MinPeakInfected},{summary.MaxPeakInfected}",
+                $"PeakDay,{summary.AvgPeakDay:F1},{summary.MinPeakDay},{summary.MaxPeakDay}",
+                $"Duration,{summary.AvgDuration:F1},{summary.MinDuration},{summary.MaxDuration}",
+                $"TotalDead,{summary.AvgTotalDead:F0},{summary.MinTotalDead},{summary.MaxTotalDead}"
+            };
+
+            File.WriteAllLines(filePath, lines);
+            Console.WriteLine($"[CSV] Resumen guardado en: {filePath}");
         }
 
         public static void ExportScaling(
@@ -30,7 +41,6 @@ namespace SirSimulations.Infrastructure
             string filePath)
         {
             var lines = new List<string> { "Threads,Time_s,Speedup,Efficiency" };
-
             lines.Add($"1_seq,{sequentialSeconds:F4},1.0000,1.0000");
 
             foreach (var (threads, seconds, speedup) in results)
