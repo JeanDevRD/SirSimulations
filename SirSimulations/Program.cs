@@ -15,24 +15,50 @@ var config = new SimulationConfig
     RandomSeed = 42
 };
 
-Console.WriteLine("Simulación SIR — Secuencial");
-Console.WriteLine($"Grilla: {config.GridRows}×{config.GridColumns} | Días: {config.TotalDays}");
-Console.WriteLine("Iniciando...\n");
+Console.WriteLine("  Simulación SIR — Secuencial:");
 
-var simulator = new SirSimulator(config);
-simulator.InitializeGrid();
+var sequentialSimulator = new SirSimulator(config);
+sequentialSimulator.InitializeGrid();
 
-var stopwatch = Stopwatch.StartNew();
-var history = simulator.Run();
-stopwatch.Stop();
+var sw = Stopwatch.StartNew();
+var sequentialHistory = sequentialSimulator.Run();
+sw.Stop();
+double sequentialSeconds = sw.Elapsed.TotalSeconds;
 
-Console.WriteLine($"Simulación completada en {stopwatch.Elapsed.TotalSeconds:F2}s\n");
+Console.WriteLine($"Tiempo: {sequentialSeconds:F2}s\n");
+CsvExporter.Export(sequentialHistory, "sequential_results.csv");
 
-foreach (var day in history.Where(d => d.Day % 30 == 0 || d.Day == 1))
-    Console.WriteLine($"Día {day.Day,3}: " +
-                      $"S={day.SusceptibleCount,9:N0}  " +
-                      $"I={day.InfectedCount,7:N0}  " +
-                      $"R={day.RecoveredCount,7:N0}  " +
-                      $"D={day.DeadCount,6:N0}");
+int[] threadCounts = { 1, 2, 4, 8 };
+var scalingResults = new List<(int threads, double seconds, double speedup)>();
 
-CsvExporter.Export(history, "sequential_results.csv");
+foreach (int threads in threadCounts)
+{
+    Console.WriteLine($"  Simulación SIR — Paralela ({threads} hilosL)");
+
+    var parallelSimulator = new ParallelSirSimulator(config, threads);
+    parallelSimulator.InitializeGrid();
+
+    sw.Restart();
+    var parallelHistory = parallelSimulator.Run();
+    sw.Stop();
+    double parallelSeconds = sw.Elapsed.TotalSeconds;
+
+    double speedup = sequentialSeconds / parallelSeconds;
+    scalingResults.Add((threads, parallelSeconds, speedup));
+
+    Console.WriteLine($"Tiempo:   {parallelSeconds:F2}s");
+    Console.WriteLine($"Speed-up: {speedup:F2}x\n");
+
+    CsvExporter.Export(parallelHistory, $"parallel_results_{threads}threads.csv");
+}
+
+Console.WriteLine("  Strong Scaling — Resumen");
+
+Console.WriteLine($"{"Hilos",-8} {"Tiempo (s)",-14} {"Speed-up",-10}");
+Console.WriteLine(new string('-', 34));
+Console.WriteLine($"{"Seq",-8} {sequentialSeconds,-14:F2} {"1.00x",-10}");
+
+foreach (var (threads, seconds, speedup) in scalingResults)
+    Console.WriteLine($"{threads,-8} {seconds,-14:F2} {speedup:F2}x");
+
+CsvExporter.ExportScaling(sequentialSeconds, scalingResults, "scaling_results.csv");
